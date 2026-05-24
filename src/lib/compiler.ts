@@ -1,5 +1,5 @@
 import Docker from 'dockerode';
-import { mkdir, writeFile, rm, readdir, copyFile } from 'fs/promises';
+import { mkdir, writeFile, rm, readdir, copyFile, cp } from 'fs/promises';
 import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 
@@ -12,7 +12,7 @@ export interface CompileResult {
 }
 
 export async function compile(opts: {
-  files: Array<{ path: string; content: string }>;
+  files: Array<{ path: string; content?: string; storagePath?: string }>;
   mainFile: string;
   compiler: string;
   outputDir: string;
@@ -29,7 +29,11 @@ export async function compile(opts: {
   for (const f of files) {
     const dest = join(inputDir, f.path);
     await mkdir(dirname(dest), { recursive: true });
-    await writeFile(dest, f.content, 'utf-8');
+    if (f.storagePath) {
+      await copyFile(f.storagePath, dest);
+    } else {
+      await writeFile(dest, f.content ?? '', 'utf-8');
+    }
   }
 
   const main = mainFile.replace(/[^a-zA-Z0-9._/-]/g, '');

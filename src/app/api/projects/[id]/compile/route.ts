@@ -13,8 +13,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const compiler: string = body.compiler ?? 'pdflatex';
 
   const files = db
-    .prepare('SELECT path, content FROM files WHERE project_id = ?')
-    .all(id) as Array<{ path: string; content: string }>;
+    .prepare('SELECT path, content, storage_path FROM files WHERE project_id = ?')
+    .all(id) as Array<{ path: string; content: string; storage_path: string | null }>;
 
   if (!files.length) {
     return new Response('data: {"type":"error","message":"No files in project"}\n\n', {
@@ -37,7 +37,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
       try {
         const result = await compile({
-          files,
+          files: files.map(f => ({
+            path: f.path,
+            content: f.storage_path ? undefined : f.content,
+            storagePath: f.storage_path ?? undefined,
+          })),
           mainFile,
           compiler,
           outputDir,

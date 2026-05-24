@@ -4,14 +4,14 @@ import { useState, useEffect, useRef, use } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
-  ChevronLeft, Play, FileText, Plus, Trash2, Loader2,
-  CheckCircle2, TriangleAlert, Eye, Terminal, ChevronRight,
+  ChevronLeft, Play, FileText, Paperclip, Plus, Trash2, Loader2,
+  CheckCircle2, TriangleAlert, Eye, Terminal, ChevronRight, Upload,
 } from 'lucide-react';
 
 const CodeEditor = dynamic(() => import('@/components/CodeEditor'), { ssr: false });
 const PdfViewer  = dynamic(() => import('@/components/PdfViewer'),  { ssr: false });
 
-interface FileEntry { id: string; name: string; path: string }
+interface FileEntry { id: string; name: string; path: string; storage_path?: string }
 interface Job { id: string; success: boolean; duration: number }
 
 export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,9 +33,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [sidebar, setSidebar]         = useState(true);
   const [newFile, setNewFile]         = useState('');
   const [showNew, setShowNew]         = useState(false);
+  const [uploading, setUploading]     = useState(false);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveTimer   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const latestContent = useRef('');
+  const uploadRef   = useRef<HTMLInputElement>(null);
 
   useEffect(() => { loadProject(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -55,13 +57,14 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   };
 
   const openFile = async (id: string, list?: FileEntry[]) => {
+    const fl = list ?? files;
+    const entry = fl.find(e => e.id === id);
+    if (entry?.storage_path) return; // binary file — not editable
     setActiveId(id);
     const res = await fetch(`/api/projects/${projectId}/files/${id}`);
     const f = await res.json();
     setContent(f.content ?? '');
     latestContent.current = f.content ?? '';
-    const fl = list ?? files;
-    const entry = fl.find(e => e.id === id);
     if (entry?.path.endsWith('.tex')) setMainFile(entry.path);
   };
 
@@ -106,6 +109,19 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
       if (updated.length) openFile(updated[0].id, updated);
       else { setActiveId(null); setContent(''); }
     }
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files ?? []);
+    if (!picked.length) return;
+    setUploading(true);
+    const form = new FormData();
+    picked.forEach(f => form.append('files', f));
+    const res = await fetch(`/api/projects/${projectId}/files/upload`, { method: 'POST', body: form });
+    const added: FileEntry[] = await res.json();
+    setFiles(prev => [...prev, ...added]);
+    setUploading(false);
+    e.target.value = '';
   };
 
   const compile = async () => {
@@ -211,6 +227,21 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
                 <button onClick={() => setShowNew(v => !v)} className="p-1 rounded hover:bg-white/10 text-[#565f89]" title="New file">
                   <Plus size={13} />
                 </button>
+                <button
+                  onClick={() => uploadRef.current?.click()}
+                  disabled={uploading}
+                  className="p-1 rounded hover:bg-white/10 text-[#565f89] disabled:opacity-40"
+                  title="Upload files"
+                >
+                  {uploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                </button>
+                <input
+                  ref={uploadRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={handleUpload}
+                />
                 <button onClick={() => setSidebar(false)} className="p-1 rounded hover:bg-white/10 text-[#565f89]" title="Hide">
                   <ChevronLeft size={13} />
                 </button>
@@ -231,24 +262,32 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             )}
 
             <div className="flex-1 overflow-y-auto py-1">
-              {files.map(f => (
-                <div
-                  key={f.id}
-                  onClick={() => openFile(f.id)}
-                  className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs group ${
-                    activeId === f.id
-                      ? 'bg-[#2d3f76] text-[#c0caf5]'
-                      : 'text-[#737aa2] hover:bg-white/5 hover:text-[#c0caf5]'
-                  }`}
-                >
-                  <FileText size={12} className="shrink-0 opacity-60" />
-                  <span className="flex-1 truncate">{f.path}</span>
-                  <button
-                    onClick={e => delFile(f.id, e)}
-                    className="opacity-0 group-hover:opacity-100 hover:text-[#ff7b72] transition-opacity"
-                  ><Trash2 size={10} /></button>
-                </div>
-              ))}
+              {files.map(f => {
+                const isBinary = !!f.storage_path;
+                return (
+                  <div
+                    key={f.id}
+                    onClick={() => openFile(f.id)}
+                    title={f.path}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-xs group ${
+                      isBinary
+                        ? 'cursor-default text-[#565f89]'
+                        : activeId === f.id
+                          ? 'cursor-pointer bg-[#2d3f76] text-[#c0caf5]'
+                          : 'cursor-pointer text-[#737aa2] hover:bg-white/5 hover:text-[#c0caf5]'
+                    }`}
+                  >
+                    {isBinary
+                      ? <Paperclip size={12} className="shrink-0 opacity-50" />
+                      : <FileText   size={12} className="shrink-0 opacity-60" />}
+                    <span className="flex-1 truncate">{f.path}</span>
+                    <button
+                      onClick={e => delFile(f.id, e)}
+                      className="opacity-0 group-hover:opacity-100 hover:text-[#ff7b72] transition-opacity"
+                    ><Trash2 size={10} /></button>
+                  </div>
+                );
+              })}
             </div>
           </aside>
         ) : (

@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const rows = db.prepare(
-    'SELECT id, project_id, name, path, created_at, updated_at FROM files WHERE project_id = ? ORDER BY path',
+    'SELECT id, project_id, name, path, storage_path, created_at, updated_at FROM files WHERE project_id = ? ORDER BY path',
   ).all(id);
   return NextResponse.json(rows);
 }
