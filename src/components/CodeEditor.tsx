@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { EditorState, EditorSelection } from '@codemirror/state';
 import { defaultKeymap, historyKeymap, history, indentWithTab } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
@@ -101,13 +101,36 @@ const latexTheme = EditorView.theme({
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-interface Props { content: string; onChange: (v: string) => void }
+export interface CodeEditorHandle { goToLine: (line: number) => void }
+interface Props {
+  content: string;
+  onChange: (v: string) => void;
+  imperativeRef?: React.MutableRefObject<CodeEditorHandle | null>;
+}
 
-export default function CodeEditor({ content, onChange }: Props) {
+export default function CodeEditor({ content, onChange, imperativeRef }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  useEffect(() => {
+    if (!imperativeRef) return;
+    imperativeRef.current = {
+      goToLine: (line: number) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const doc = view.state.doc;
+        const lineObj = doc.line(Math.max(1, Math.min(line, doc.lines)));
+        view.dispatch({
+          selection: EditorSelection.cursor(lineObj.from),
+          effects: EditorView.scrollIntoView(lineObj.from, { y: 'center' }),
+        });
+        view.focus();
+      },
+    };
+    return () => { if (imperativeRef) imperativeRef.current = null; };
+  }, [imperativeRef]);
 
   useEffect(() => {
     if (!containerRef.current) return;

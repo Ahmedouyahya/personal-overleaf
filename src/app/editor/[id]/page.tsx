@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, use } from 'react';
+import { useState, useEffect, useRef, use, useCallback } from 'react';
+import type { CodeEditorHandle } from '@/components/CodeEditor';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import {
@@ -35,9 +36,10 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [showNew, setShowNew]         = useState(false);
   const [uploading, setUploading]     = useState(false);
 
-  const saveTimer   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveTimer     = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const latestContent = useRef('');
-  const uploadRef   = useRef<HTMLInputElement>(null);
+  const uploadRef     = useRef<HTMLInputElement>(null);
+  const editorRef     = useRef<CodeEditorHandle>(null);
 
   useEffect(() => { loadProject(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -123,6 +125,18 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     setUploading(false);
     e.target.value = '';
   };
+
+  const handleNavigate = useCallback((file: string, line: number) => {
+    const match = files.find(f => f.path === file || f.name === file);
+    if (match && match.id !== activeId) {
+      openFile(match.id).then(() => {
+        // goToLine after the new file content is set; small delay for state update
+        setTimeout(() => editorRef.current?.goToLine(line), 150);
+      });
+    } else {
+      editorRef.current?.goToLine(line);
+    }
+  }, [files, activeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const compile = async () => {
     await save();
@@ -303,7 +317,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         {/* Code editor */}
         <div className="flex-1 overflow-hidden">
           {activeId ? (
-            <CodeEditor key={activeId} content={content} onChange={handleChange} />
+            <CodeEditor imperativeRef={editorRef} key={activeId} content={content} onChange={handleChange} />
           ) : (
             <div className="h-full flex items-center justify-center text-[#565f89] text-sm">
               Select a file to edit
@@ -335,7 +349,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           <div className="flex-1 overflow-hidden">
             {rightTab === 'pdf' ? (
               pdfJobId ? (
-                <PdfViewer url={`/api/jobs/${pdfJobId}/pdf`} />
+                <PdfViewer url={`/api/jobs/${pdfJobId}/pdf`} pdfJobId={pdfJobId} onNavigate={handleNavigate} />
               ) : (
                 <div className="h-full flex items-center justify-center text-[#565f89] text-sm">
                   {compiling ? (
