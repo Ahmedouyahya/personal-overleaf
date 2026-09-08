@@ -7,8 +7,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const { id } = await params;
   const rows = db.prepare(
     'SELECT id, project_id, name, path, storage_path, created_at, updated_at FROM files WHERE project_id = ? ORDER BY path',
-  ).all(id);
-  return NextResponse.json(rows);
+  ).all(id) as Array<Record<string, unknown>>;
+  // Never leak absolute server paths — expose only an isBinary flag.
+  return NextResponse.json(rows.map(({ storage_path, ...rest }) => ({ ...rest, isBinary: !!storage_path })));
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -33,7 +34,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   db.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').run(now, id);
 
   return NextResponse.json(
-    db.prepare('SELECT id, project_id, name, path, storage_path, created_at, updated_at FROM files WHERE id = ?').get(fileId),
+    (() => {
+      const row = db.prepare('SELECT id, project_id, name, path, storage_path, created_at, updated_at FROM files WHERE id = ?').get(fileId) as Record<string, unknown>;
+      const { storage_path, ...rest } = row;
+      return { ...rest, isBinary: !!storage_path };
+    })(),
     { status: 201 },
   );
 }

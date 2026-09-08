@@ -56,9 +56,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     db.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').run(now, id);
 
     created.push(
-      db.prepare(
-        'SELECT id, project_id, name, path, storage_path, created_at, updated_at FROM files WHERE id = ?',
-      ).get(fileId),
+      (() => {
+        const row = db.prepare(
+          'SELECT id, project_id, name, path, created_at, updated_at FROM files WHERE id = ?',
+        ).get(fileId) as Record<string, unknown>;
+        return { ...row, isBinary: true };
+      })(),
     );
   }
 
