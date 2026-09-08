@@ -1,0 +1,14 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - TEXLIVE_IMAGE=${TEXLIVE_IMAGE:-texlive/texlive:latest}
+      - COMPILE_TIMEOUT=${COMPILE_TIMEOUT:-120}
+    volumes:
+      # Persist SQLite + compiled PDFs
+      - ./data:/app/data
+      # Allow spawning isolated TeX Live containers for compilation
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
