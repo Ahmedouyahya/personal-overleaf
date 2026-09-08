@@ -10,25 +10,45 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => { load(); }, []);
 
-  const load = () =>
-    fetch('/api/projects').then(r => r.json()).then(setProjects);
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch('/api/projects');
+      if (!r.ok) throw new Error(`Load failed (${r.status})`);
+      setProjects(await r.json());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load projects');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const create = async () => {
     if (!newName.trim()) return;
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim() }),
-    });
-    const p = await res.json();
-    setCreating(false);
-    setNewName('');
-    router.push(`/editor/${p.id}`);
+    setError(null);
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      if (!res.ok) throw new Error(`Create failed (${res.status})`);
+      const p = await res.json();
+      if (!p?.id) throw new Error('Create returned no id');
+      setCreating(false);
+      setNewName('');
+      router.push(`/editor/${p.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create project');
+    }
   };
 
   const del = async (id: string, e: React.MouseEvent) => {
@@ -70,6 +90,12 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
+        {error && (
+          <div className="mb-5 p-3 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600 flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={load} className="font-medium hover:underline">Retry</button>
+          </div>
+        )}
         {/* New project form */}
         {creating && (
           <div className="mb-5 p-4 bg-white rounded-2xl border border-gray-200 shadow-sm">
@@ -83,7 +109,7 @@ export default function Dashboard() {
                 placeholder="Project name"
                 className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0071E3]/30"
               />
-              <button onClick={create} className="px-4 py-1.5 bg-[#0071E3] text-white rounded-lg text-sm font-medium hover:brightness-110">
+              <button onClick={create} disabled={!newName.trim()} className="px-4 py-1.5 bg-[#0071E3] text-white rounded-lg text-sm font-medium hover:brightness-110 disabled:opacity-40">
                 Create
               </button>
               <button onClick={() => setCreating(false)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">
@@ -94,7 +120,11 @@ export default function Dashboard() {
         )}
 
         {/* Project list */}
-        {projects.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-24 text-gray-400">
+            <p className="font-medium">Loading projects…</p>
+          </div>
+        ) : projects.length === 0 ? (
           <div className="text-center py-24 text-gray-400">
             <FolderOpen size={44} className="mx-auto mb-4 opacity-30" />
             <p className="font-medium">No projects yet</p>

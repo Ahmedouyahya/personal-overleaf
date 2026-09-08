@@ -35,6 +35,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [newFile, setNewFile]         = useState('');
   const [showNew, setShowNew]         = useState(false);
   const [uploading, setUploading]     = useState(false);
+  const [saveState, setSaveState]     = useState<'saved' | 'saving' | 'error'>('saved');
+  const [loadError, setLoadError]     = useState<string | null>(null);
 
   const saveTimer     = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const latestContent = useRef('');
@@ -43,18 +45,38 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
   useEffect(() => { loadProject(); }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Clear pending autosave on unmount to avoid writing after navigation.
+  useEffect(() => () => clearTimeout(saveTimer.current), []);
+
+  // Ctrl/Cmd+S saves, Ctrl/Cmd+Enter compiles.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); compile(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+
   const loadProject = async () => {
-    const [pr, fr] = await Promise.all([
-      fetch(`/api/projects/${projectId}`),
-      fetch(`/api/projects/${projectId}/files`),
-    ]);
-    const project = await pr.json();
-    const fileList: FileEntry[] = await fr.json();
-    setProjectName(project.name);
-    setFiles(fileList);
-    if (fileList.length) {
-      const f = fileList.find(f => f.path === 'main.tex') ?? fileList[0];
-      openFile(f.id, fileList);
+    setLoadError(null);
+    try {
+      const [pr, fr] = await Promise.all([
+        fetch(`/api/projects/${projectId}`),
+        fetch(`/api/projects/${projectId}/files`),
+      ]);
+      if (pr.status === 404) { setLoadError('Project not found'); return; }
+      if (!pr.ok || !fr.ok) throw new Error(`Load failed (${pr.status}/${fr.status})`);
+      const project = await pr.json();
+      const fileList: FileEntry[] = await fr.json();
+      setProjectName(project.name ?? '');
+      setFiles(fileList);
+      if (fileList.length) {
+        const f = fileList.find(f => f.path === 'main.tex') ?? fileList[0];
+        openFile(f.id, fileList);
+      }
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Failed to load project');
     }
   };
 
@@ -62,37 +84,56 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     const fl = list ?? files;
     const entry = fl.find(e => e.id === id);
     if (entry?.storage_path) return; // binary file — not editable
+    // Flush any pending edit to the previous file before switching.
+    clearTimeout(saveTimer.current);
+    if (activeId && latestContent.current !== content) await save(latestContent.current);
     setActiveId(id);
-    const res = await fetch(`/api/projects/${projectId}/files/${id}`);
-    const f = await res.json();
-    setContent(f.content ?? '');
-    latestContent.current = f.content ?? '';
+    try {
+      const res = await fetch(`/api/projects/${projectId}/files/${id}`);
+      if (!res.ok) throw new Error(`Open failed (${res.status})`);
+      const f = await res.json();
+      setContent(f.content ?? '');
+      latestContent.current = f.content ?? '';
+    } catch {
+      setContent('');
+      latestContent.current = '';
+    }
     if (entry?.path.endsWith('.tex')) setMainFile(entry.path);
   };
 
   const handleChange = (val: string) => {
     latestContent.current = val;
+    setSaveState('saving');
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => save(val), 1000);
   };
 
   const save = async (c?: string) => {
     if (!activeId) return;
-    await fetch(`/api/projects/${projectId}/files/${activeId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: c ?? latestContent.current }),
-    });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/files/${activeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: c ?? latestContent.current }),
+      });
+      if (!res.ok) throw new Error();
+      setSaveState('saved');
+    } catch {
+      setSaveState('error');
+    }
   };
 
   const addFile = async () => {
-    if (!newFile.trim()) return;
     const name = newFile.trim();
+    if (!name) return;
+    if (name.startsWith('/') || name.includes('..') || name.includes('\\')) return;
+    if (files.some(f => f.path === name)) return;
     const res = await fetch(`/api/projects/${projectId}/files`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, path: name }),
     });
+    if (!res.ok) return;
     const f = await res.json();
     const updated = [...files, { id: f.id, name: f.name, path: f.path }];
     setFiles(updated);
@@ -166,9 +207,11 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         try {
           const evt = JSON.parse(line.slice(6));
           if (evt.type === 'log') setLogs(p => [...p, evt.line]);
+          if (evt.type === 'error') { setLogs(p => [...p, `Error: ${evt.message ?? 'compile failed'}`]); setRightTab('log'); }
           if (evt.type === 'done') {
             setJob({ id: evt.jobId, success: evt.success, duration: evt.duration });
             if (evt.success) { setPdfJobId(evt.jobId); setRightTab('pdf'); }
+            else setRightTab('log');
           }
         } catch {}
       }
@@ -179,6 +222,12 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   return (
     <div className="h-screen flex flex-col bg-[#1a1b26] text-[#c0caf5] overflow-hidden">
 
+      {loadError && (
+        <div className="shrink-0 px-4 py-2 bg-red-950/60 border-b border-red-900 text-xs text-red-300 flex items-center justify-between">
+          <span>{loadError}</span>
+          <button onClick={() => router.push('/')} className="font-medium hover:underline">Back to projects</button>
+        </div>
+      )}
       {/* ── Header ── */}
       <header className="shrink-0 flex items-center gap-3 px-4 py-2 bg-[#16171f] border-b border-[#1f2233]">
         <button onClick={() => router.push('/')} className="p-1.5 rounded hover:bg-white/10 text-[#737aa2]">
@@ -226,6 +275,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
                 : <><TriangleAlert size={12} /> Error</>}
             </span>
           )}
+          <span className="text-[10px] text-[#565f89] select-none" title="Autosave status">
+            {saveState === 'saving' ? 'Saving…' : saveState === 'error' ? 'Save failed' : 'Saved'}
+          </span>
         </div>
       </header>
 
