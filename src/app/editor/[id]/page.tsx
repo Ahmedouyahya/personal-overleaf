@@ -154,9 +154,21 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const delFile = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Delete this file?')) return;
-    await fetch(`/api/projects/${projectId}/files/${id}`, { method: 'DELETE' });
+    try {
+      const r = await fetch(`/api/projects/${projectId}/files/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error(`Delete failed (${r.status})`);
+    } catch {
+      setLogs(p => [...p, 'Error: could not delete file']);
+      setRightTab('log');
+      return;
+    }
+    const deleted = files.find(f => f.id === id);
     const updated = files.filter(f => f.id !== id);
     setFiles(updated);
+    if (deleted && deleted.path === mainFile) {
+      const nextTex = updated.find(f => f.path.endsWith('.tex'));
+      setMainFile(nextTex ? nextTex.path : 'main.tex');
+    }
     if (activeId === id) {
       if (updated.length) openFile(updated[0].id, updated);
       else { setActiveId(null); setContent(''); }
@@ -452,7 +464,13 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           <div className="flex-1 overflow-hidden">
             {rightTab === 'pdf' ? (
               pdfJobId ? (
-                <PdfViewer url={`/api/jobs/${pdfJobId}/pdf`} pdfJobId={pdfJobId} initialScale={pdfScale} onNavigate={handleNavigate} />
+                <PdfViewer
+                  url={`/api/jobs/${pdfJobId}/pdf`}
+                  pdfJobId={pdfJobId}
+                  initialScale={pdfScale}
+                  filename={`${(projectName || 'document').replace(/[^a-zA-Z0-9._()-]+/g, '_').slice(0, 80) || 'document'}.pdf`}
+                  onNavigate={handleNavigate}
+                />
               ) : (
                 <div className="h-full flex items-center justify-center text-[#565f89] text-sm">
                   {compiling ? (
