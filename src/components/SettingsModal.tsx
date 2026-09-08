@@ -1,10 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DEFAULT_PREFS, loadPrefs, savePrefs, type Prefs } from '@/lib/settings';
 
 export default function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [prefs, setPrefs] = useState<Prefs>(() => ({ ...DEFAULT_PREFS, ...loadPrefs() }));
+  // Reload saved prefs on every open so cancelled edits don't linger.
+  useEffect(() => {
+    if (open) setPrefs({ ...DEFAULT_PREFS, ...loadPrefs() });
+  }, [open ]);
   if (!open) return null;
 
   const save = () => {

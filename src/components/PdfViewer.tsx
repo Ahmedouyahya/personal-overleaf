@@ -14,10 +14,11 @@ interface Props {
   url: string;
   pdfJobId?: string;
   initialScale?: number;
+  filename?: string;
   onNavigate?: (file: string, line: number) => void;
 }
 
-export default function PdfViewer({ url, pdfJobId, initialScale = 1.2, onNavigate }: Props) {
+export default function PdfViewer({ url, pdfJobId, initialScale = 1.2, filename = 'document.pdf', onNavigate }: Props) {
   const [numPages, setNumPages] = useState(0);
   const [page, setPage]         = useState(1);
   const [scale, setScale]       = useState(initialScale);
@@ -81,7 +82,7 @@ export default function PdfViewer({ url, pdfJobId, initialScale = 1.2, onNavigat
         <button onClick={() => setScale(s => Math.max(0.5, s - 0.2))} className="p-1 rounded hover:bg-white/10"><ZoomOut size={13} /></button>
         <span className="w-10 text-center">{Math.round(scale * 100)}%</span>
         <button onClick={() => setScale(s => Math.min(3, s + 0.2))} className="p-1 rounded hover:bg-white/10"><ZoomIn size={13} /></button>
-        <a href={url} download="document.pdf" className="p-1 rounded hover:bg-white/10 hover:text-[#c0caf5]" title="Download">
+        <a href={url} download={filename} className="p-1 rounded hover:bg-white/10 hover:text-[#c0caf5]" title="Download">
           <Download size={13} />
         </a>
       </div>

@@ -69,19 +69,29 @@ export default function Dashboard() {
   const del = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Delete this project?')) return;
-    await fetch(`/api/projects/${id}`, { method: 'DELETE' });
-    load();
+    try {
+      const r = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error(`Delete failed (${r.status})`);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete project');
+    }
   };
 
   const rename = async () => {
     if (!renaming || !renaming.name.trim()) return;
-    await fetch(`/api/projects/${renaming.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: renaming.name.trim() }),
-    });
-    setRenaming(null);
-    load();
+    try {
+      const r = await fetch(`/api/projects/${renaming.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: renaming.name.trim() }),
+      });
+      if (!r.ok) throw new Error(`Rename failed (${r.status})`);
+      setRenaming(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to rename project');
+    }
   };
 
   return (
