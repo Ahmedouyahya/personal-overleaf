@@ -28,6 +28,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ jobId: str
       'Content-Type': 'application/pdf',
       'Content-Length': String(size),
       'Content-Disposition': 'inline; filename="document.pdf"',
+      // Job PDFs are immutable (jobId in URL) — safe to cache privately.
+      'Cache-Control': 'private, max-age=3600',
     },
   });
 }

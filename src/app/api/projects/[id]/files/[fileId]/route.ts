@@ -6,9 +6,12 @@ type Ctx = { params: Promise<{ id: string; fileId: string }> };
 
 export async function GET(_: Request, { params }: Ctx) {
   const { id, fileId } = await params;
-  const row = db.prepare('SELECT * FROM files WHERE id = ? AND project_id = ?').get(fileId, id);
+  const row = db.prepare(
+    'SELECT id, project_id, name, path, content, storage_path, created_at, updated_at FROM files WHERE id = ? AND project_id = ?',
+  ).get(fileId, id) as Record<string, unknown> | undefined;
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(row);
+  const { storage_path, ...rest } = row;
+  return NextResponse.json({ ...rest, isBinary: !!storage_path });
 }
 
 export async function PUT(req: Request, { params }: Ctx) {
@@ -41,11 +44,23 @@ export async function PUT(req: Request, { params }: Ctx) {
   db.prepare(`UPDATE files SET ${cols.join(', ')} WHERE id = ? AND project_id = ?`).run(...vals);
   db.prepare('UPDATE projects SET updated_at = ? WHERE id = ?').run(now, id);
 
-  return NextResponse.json(db.prepare('SELECT * FROM files WHERE id = ?').get(fileId));
+  const updated = db.prepare(
+    'SELECT id, project_id, name, path, content, storage_path, created_at, updated_at FROM files WHERE id = ?',
+  ).get(fileId) as Record<string, unknown>;
+  const { storage_path, ...rest } = updated;
+  return NextResponse.json({ ...rest, isBinary: !!storage_path });
 }
 
 export async function DELETE(_: Request, { params }: Ctx) {
   const { id, fileId } = await params;
+  const row = db.prepare('SELECT storage_path FROM files WHERE id = ? AND project_id = ?').get(fileId, id) as
+    | { storage_path: string | null }
+    | undefined;
   db.prepare('DELETE FROM files WHERE id = ? AND project_id = ?').run(fileId, id);
+  // Best-effort: remove the orphaned upload from disk.
+  if (row?.storage_path) {
+    const { unlink } = await import('fs/promises');
+    await unlink(row.storage_path).catch(() => {});
+  }
   return new NextResponse(null, { status: 204 });
 }

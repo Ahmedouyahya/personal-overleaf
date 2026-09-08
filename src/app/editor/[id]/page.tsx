@@ -12,7 +12,7 @@ import {
 const CodeEditor = dynamic(() => import('@/components/CodeEditor'), { ssr: false });
 const PdfViewer  = dynamic(() => import('@/components/PdfViewer'),  { ssr: false });
 
-interface FileEntry { id: string; name: string; path: string; storage_path?: string }
+interface FileEntry { id: string; name: string; path: string; isBinary?: boolean }
 interface Job { id: string; success: boolean; duration: number }
 
 export default function EditorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -83,7 +83,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const openFile = async (id: string, list?: FileEntry[]) => {
     const fl = list ?? files;
     const entry = fl.find(e => e.id === id);
-    if (entry?.storage_path) return; // binary file — not editable
+    if (entry?.isBinary) return; // binary file — not editable
     // Flush any pending edit to the previous file before switching.
     clearTimeout(saveTimer.current);
     if (activeId && latestContent.current !== content) await save(latestContent.current);
@@ -329,7 +329,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
             <div className="flex-1 overflow-y-auto py-1">
               {files.map(f => {
-                const isBinary = !!f.storage_path;
+                const isBinary = !!f.isBinary;
                 return (
                   <div
                     key={f.id}

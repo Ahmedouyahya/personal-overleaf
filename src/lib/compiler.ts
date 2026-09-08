@@ -21,7 +21,7 @@ export async function compile(opts: {
 }): Promise<CompileResult> {
   const { files, mainFile, compiler, outputDir, onLog } = opts;
 
-  const tmpBase = join(tmpdir(), `pers-latex-${Date.now()}`);
+  const tmpBase = join(tmpdir(), `pers-latex-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
   const inputDir = join(tmpBase, 'input');
   const tmpOut = join(tmpBase, 'output');
   await mkdir(inputDir, { recursive: true });
