@@ -157,14 +157,27 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const picked = Array.from(e.target.files ?? []);
     if (!picked.length) return;
+    if (picked.length > 10) { setLogs(p => [...p, 'Error: max 10 files per upload']); setRightTab('log'); e.target.value = ''; return; }
+    const big = picked.find(f => f.size > 10 * 1024 * 1024);
+    if (big) { setLogs(p => [...p, `Error: file too large (max 10 MB): ${big.name}`]); setRightTab('log'); e.target.value = ''; return; }
     setUploading(true);
-    const form = new FormData();
-    picked.forEach(f => form.append('files', f));
-    const res = await fetch(`/api/projects/${projectId}/files/upload`, { method: 'POST', body: form });
-    const added: FileEntry[] = await res.json();
-    setFiles(prev => [...prev, ...added]);
-    setUploading(false);
-    e.target.value = '';
+    try {
+      const form = new FormData();
+      picked.forEach(f => form.append('files', f));
+      const res = await fetch(`/api/projects/${projectId}/files/upload`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? `Upload failed (${res.status})`);
+      }
+      const added: FileEntry[] = await res.json();
+      setFiles(prev => [...prev, ...added]);
+    } catch (err) {
+      setLogs(p => [...p, `Error: ${err instanceof Error ? err.message : 'upload failed'}`]);
+      setRightTab('log');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
   };
 
   const handleNavigate = useCallback((file: string, line: number) => {
@@ -185,39 +198,56 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     setLogs([]);
     setRightTab('log');
 
-    const res = await fetch(`/api/projects/${projectId}/compile`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mainFile, compiler }),
-    });
-    if (!res.body) { setCompiling(false); return; }
+    try {
+      const res = await fetch(`/api/projects/${projectId}/compile`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mainFile, compiler }),
+      });
+      if (!res.body) throw new Error('Empty compile response');
 
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop() ?? '';
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          const evt = JSON.parse(line.slice(6));
-          if (evt.type === 'log') setLogs(p => [...p, evt.line]);
-          if (evt.type === 'error') { setLogs(p => [...p, `Error: ${evt.message ?? 'compile failed'}`]); setRightTab('log'); }
-          if (evt.type === 'done') {
-            setJob({ id: evt.jobId, success: evt.success, duration: evt.duration });
-            if (evt.success) { setPdfJobId(evt.jobId); setRightTab('pdf'); }
-            else setRightTab('log');
-          }
-        } catch {}
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            if (evt.type === 'log') setLogs(p => [...p, evt.line]);
+            if (evt.type === 'error') { setLogs(p => [...p, `Error: ${evt.message ?? 'compile failed'}`]); setRightTab('log'); }
+            if (evt.type === 'done') {
+              setJob({ id: evt.jobId, success: evt.success, duration: evt.duration });
+              if (evt.success) { setPdfJobId(evt.jobId); setRightTab('pdf'); }
+              else setRightTab('log');
+            }
+          } catch {}
+        }
       }
+    } catch (e) {
+      setLogs(p => [...p, `Error: ${e instanceof Error ? e.message : 'compile request failed'}`]);
+      setRightTab('log');
+    } finally {
+      setCompiling(false);
     }
-    setCompiling(false);
   };
+
+  const texFiles = files.filter(f => f.path.endsWith('.tex'));
+
+  // Warn before leaving with edits not yet autosaved.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (saveState === 'saving') e.preventDefault();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [saveState]);
 
   return (
     <div className="h-screen flex flex-col bg-[#1a1b26] text-[#c0caf5] overflow-hidden">
@@ -239,6 +269,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           <select
             value={compiler}
             onChange={e => setCompiler(e.target.value)}
+            aria-label="LaTeX compiler"
+            title="LaTeX compiler"
             className="text-xs bg-[#1f2233] border border-[#2d3f76] rounded px-2 py-1 text-[#c0caf5] focus:outline-none"
           >
             <option value="pdflatex">pdflatex</option>
@@ -247,13 +279,15 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
             <option value="latexmk">latexmk</option>
           </select>
 
-          {files.filter(f => f.path.endsWith('.tex')).length > 1 && (
+          {texFiles.length > 1 && (
             <select
               value={mainFile}
               onChange={e => setMainFile(e.target.value)}
+              aria-label="Main TeX file"
+              title="Main TeX file"
               className="text-xs bg-[#1f2233] border border-[#2d3f76] rounded px-2 py-1 text-[#c0caf5] max-w-[140px] focus:outline-none"
             >
-              {files.filter(f => f.path.endsWith('.tex')).map(f => (
+              {texFiles.map(f => (
                 <option key={f.id} value={f.path}>{f.path}</option>
               ))}
             </select>
@@ -261,7 +295,8 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
 
           <button
             onClick={compile}
-            disabled={compiling}
+            disabled={compiling || texFiles.length === 0}
+            title={texFiles.length === 0 ? 'Add a .tex file first' : 'Compile (Ctrl+Enter)'}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0071E3] text-white rounded-lg text-xs font-medium hover:brightness-110 disabled:opacity-50 transition-all"
           >
             {compiling ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}

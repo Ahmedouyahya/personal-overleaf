@@ -6,10 +6,23 @@ import { Plus, FolderOpen, Trash2, Edit3, BookOpen } from 'lucide-react';
 
 interface Project { id: string; name: string; created_at: number; updated_at: number }
 
+function timeAgo(ts: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
 export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
@@ -131,8 +144,20 @@ export default function Dashboard() {
             <p className="text-sm mt-1">Create your first LaTeX project to get started</p>
           </div>
         ) : (
-          <div className="grid gap-2.5">
-            {projects.map(p => (
+          <>
+            {projects.length > 3 && (
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Filter projects…"
+                aria-label="Filter projects"
+                className="w-full mb-3 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0071E3]/30"
+              />
+            )}
+            <div className="grid gap-2.5">
+              {projects
+                .filter(p => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+                .map(p => (
               <div
                 key={p.id}
                 onClick={() => router.push(`/editor/${p.id}`)}
@@ -154,8 +179,8 @@ export default function Dashboard() {
                 ) : (
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-[#1D1D1F] truncate">{p.name}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Updated {new Date(p.updated_at).toLocaleDateString()}
+                    <p className="text-xs text-gray-400 mt-0.5" title={new Date(p.updated_at).toLocaleString()}>
+                      Updated {timeAgo(p.updated_at)}
                     </p>
                   </div>
                 )}
@@ -166,16 +191,19 @@ export default function Dashboard() {
                 >
                   <button
                     onClick={() => setRenaming({ id: p.id, name: p.name })}
+                    aria-label={`Rename ${p.name}`}
                     className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600"
                   ><Edit3 size={13} /></button>
                   <button
                     onClick={e => del(p.id, e)}
+                    aria-label={`Delete ${p.name}`}
                     className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
                   ><Trash2 size={13} /></button>
                 </div>
               </div>
             ))}
           </div>
+          </>
         )}
       </main>
     </div>

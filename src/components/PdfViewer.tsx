@@ -43,15 +43,34 @@ export default function PdfViewer({ url, pdfJobId, onNavigate }: Props) {
       .catch(() => {});
   }, [pdfJobId, onNavigate, scale]);
 
+  // Arrow keys flip pages when the viewer is focused.
+  const onToolbarKey = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowLeft') setPage(p => Math.max(1, p - 1));
+    if (e.key === 'ArrowRight') setPage(p => (numPages ? Math.min(numPages, p + 1) : p));
+  }, [numPages]);
+
+  const jumpTo = useCallback((raw: string) => {
+    const n = parseInt(raw, 10);
+    if (Number.isFinite(n)) setPage(Math.max(1, numPages ? Math.min(numPages, n) : n));
+  }, [numPages]);
+
   return (
     <div className="flex flex-col h-full bg-[#1a1b26]">
       {/* Toolbar */}
-      <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 border-b border-[#1f2233] bg-[#16171f] text-xs text-[#737aa2]">
-        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-1 rounded hover:bg-white/10 disabled:opacity-30">
+      <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 border-b border-[#1f2233] bg-[#16171f] text-xs text-[#737aa2]" onKeyDown={onToolbarKey}>
+        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} aria-label="Previous page" className="p-1 rounded hover:bg-white/10 disabled:opacity-30">
           <ChevronLeft size={13} />
         </button>
-        <span>{numPages ? page : '—'} / {numPages || '—'}</span>
-        <button onClick={() => setPage(p => numPages ? Math.min(numPages, p + 1) : p)} disabled={page >= numPages} className="p-1 rounded hover:bg-white/10 disabled:opacity-30">
+        <input
+          value={numPages ? String(page) : ''}
+          onChange={e => jumpTo(e.target.value)}
+          placeholder="—"
+          aria-label="Page number"
+          inputMode="numeric"
+          className="w-10 text-center bg-transparent border border-transparent hover:border-[#2d3f76] focus:border-[#2d3f76] rounded px-1 py-0.5 focus:outline-none"
+        />
+        <span>/ {numPages || '—'}</span>
+        <button onClick={() => setPage(p => numPages ? Math.min(numPages, p + 1) : p)} disabled={page >= numPages} aria-label="Next page" className="p-1 rounded hover:bg-white/10 disabled:opacity-30">
           <ChevronRight size={13} />
         </button>
         <div className="flex-1" />
