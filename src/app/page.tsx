@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, FolderOpen, Trash2, Edit3, BookOpen } from 'lucide-react';
+import { Plus, FolderOpen, Trash2, Edit3, BookOpen, Settings } from 'lucide-react';
+import SettingsModal from '@/components/SettingsModal';
 
 interface Project { id: string; name: string; created_at: number; updated_at: number }
 
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => { load(); }, []);
@@ -93,14 +95,25 @@ export default function Dashboard() {
             </div>
             <span className="font-semibold text-[#1D1D1F]">Personal Overleaf</span>
           </div>
-          <button
-            onClick={() => setCreating(true)}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-[#0071E3] text-white rounded-lg text-sm font-medium hover:brightness-110 active:scale-[0.98] transition-all"
-          >
-            <Plus size={14} /> New Project
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+              title="Settings"
+              className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            >
+              <Settings size={16} />
+            </button>
+            <button
+              onClick={() => setCreating(true)}
+              className="flex items-center gap-1.5 px-4 py-1.5 bg-[#0071E3] text-white rounded-lg text-sm font-medium hover:brightness-110 active:scale-[0.98] transition-all"
+            >
+              <Plus size={14} /> New Project
+            </button>
+          </div>
         </div>
       </header>
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <main className="max-w-4xl mx-auto px-6 py-8">
         {error && (

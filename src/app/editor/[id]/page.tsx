@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, use, useCallback } from 'react';
+import { useState, useEffect, useRef, use, useCallback, useMemo } from 'react';
 import type { CodeEditorHandle } from '@/components/CodeEditor';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -8,6 +8,7 @@ import {
   ChevronLeft, Play, FileText, Paperclip, Plus, Trash2, Loader2,
   CheckCircle2, TriangleAlert, Eye, Terminal, ChevronRight, Upload,
 } from 'lucide-react';
+import { loadPrefs } from '@/lib/settings';
 
 const CodeEditor = dynamic(() => import('@/components/CodeEditor'), { ssr: false });
 const PdfViewer  = dynamic(() => import('@/components/PdfViewer'),  { ssr: false });
@@ -24,7 +25,9 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
   const [activeId, setActiveId]       = useState<string | null>(null);
   const [content, setContent]         = useState('');
   const [mainFile, setMainFile]       = useState('main.tex');
-  const [compiler, setCompiler]       = useState('pdflatex');
+  const [compiler, setCompiler]       = useState(() => loadPrefs().defaultCompiler);
+  const [autosaveMs] = useState(() => loadPrefs().autosaveMs);
+  const [pdfScale] = useState(() => loadPrefs().defaultScale);
 
   const [compiling, setCompiling]     = useState(false);
   const [logs, setLogs]               = useState<string[]>([]);
@@ -105,8 +108,14 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
     latestContent.current = val;
     setSaveState('saving');
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => save(val), 1000);
+    saveTimer.current = setTimeout(() => save(val), autosaveMs);
   };
+
+  const stats = useMemo(() => {
+    const lines = content ? content.split('\n').length : 0;
+    const words = content.trim() ? content.trim().split(/\s+/).length : 0;
+    return { lines, words };
+  }, [content]);
 
   const save = async (c?: string) => {
     if (!activeId) return;
@@ -402,14 +411,21 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
         )}
 
         {/* Code editor */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-hidden">
+            {activeId ? (
+              <CodeEditor imperativeRef={editorRef} key={activeId} content={content} onChange={handleChange} />
+            ) : (
+              <div className="h-full flex items-center justify-center text-[#565f89] text-sm">
+                Select a file to edit
+              </div>
+            )}
+          </div>
           {activeId ? (
-            <CodeEditor imperativeRef={editorRef} key={activeId} content={content} onChange={handleChange} />
-          ) : (
-            <div className="h-full flex items-center justify-center text-[#565f89] text-sm">
-              Select a file to edit
+            <div className="shrink-0 px-3 py-1 border-t border-[#1f2233] text-[10px] text-[#565f89] select-none">
+              {stats.lines} lines • {stats.words} words
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* PDF / Log panel */}
@@ -436,7 +452,7 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
           <div className="flex-1 overflow-hidden">
             {rightTab === 'pdf' ? (
               pdfJobId ? (
-                <PdfViewer url={`/api/jobs/${pdfJobId}/pdf`} pdfJobId={pdfJobId} onNavigate={handleNavigate} />
+                <PdfViewer url={`/api/jobs/${pdfJobId}/pdf`} pdfJobId={pdfJobId} initialScale={pdfScale} onNavigate={handleNavigate} />
               ) : (
                 <div className="h-full flex items-center justify-center text-[#565f89] text-sm">
                   {compiling ? (
@@ -456,7 +472,23 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
               <div className="h-full overflow-y-auto font-mono text-[11px] leading-relaxed p-3 text-[#9ca3af] whitespace-pre-wrap break-all">
                 {logs.length === 0 ? (
                   <span className="text-[#3b4261]">No output yet — press Compile.</span>
-                ) : logs.join('\n')}
+                ) : logs.map((line, i) => {
+                  const m = line.match(/(?:^|\s)l\.(\d+)\b/);
+                  if (!m) return <div key={i}>{line}</div>;
+                  const n = parseInt(m[1], 10);
+                  return (
+                    <div key={i}>
+                      {line}{' '}
+                      <button
+                        onClick={() => { setRightTab('pdf'); editorRef.current?.goToLine(n); }}
+                        className="text-[#7aa2f7] hover:underline"
+                        title={`Jump to line ${n}`}
+                      >
+                        → line {n}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

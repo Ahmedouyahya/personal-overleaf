@@ -40,6 +40,18 @@ Verify setup anytime: `curl http://localhost:3000/api/health` → `{ ok: true, c
 4. Double-click PDF to jump to the `.tex` line (needs `synctex` binary on host for reverse lookup).
 5. Upload `.png` / `.pdf` figures via the upload button; reference with `\includegraphics{filename}`.
 
+## Settings
+
+Gear icon (dashboard) → stored in this browser only:
+
+| Pref | Options | Effect |
+| ---- | ------- | ------ |
+| Default compiler | pdflatex / xelatex / lualatex / latexmk | Pre-selected for new editor sessions |
+| Autosave delay | 0.5s / 1s / 2s | Debounce for editor PUTs (2s = fewer writes) |
+| Default PDF zoom | 100 / 120 / 150% | Initial preview scale per compile |
+
+Server knobs (image, timeout, socket) stay in env — see below. They apply to everyone using this install.
+
 ## Env
 
 | Var | Default | Purpose |
