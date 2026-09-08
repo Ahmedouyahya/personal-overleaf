@@ -13,13 +13,14 @@ pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 interface Props {
   url: string;
   pdfJobId?: string;
+  initialScale?: number;
   onNavigate?: (file: string, line: number) => void;
 }
 
-export default function PdfViewer({ url, pdfJobId, onNavigate }: Props) {
+export default function PdfViewer({ url, pdfJobId, initialScale = 1.2, onNavigate }: Props) {
   const [numPages, setNumPages] = useState(0);
   const [page, setPage]         = useState(1);
-  const [scale, setScale]       = useState(1.2);
+  const [scale, setScale]       = useState(initialScale);
   const [error, setError]       = useState<string | null>(null);
 
   // New compile → back to page 1 (old page may not exist in the new PDF).
