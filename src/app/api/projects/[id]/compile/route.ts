@@ -73,6 +73,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         await writeFile(join(outputDir, 'compile.log'), result.log, 'utf-8').catch(() => {});
         send('done', { jobId, success: result.success, duration });
+        // Retention: keep only the 10 newest jobs per project (disk + rows).
+        try {
+          const stale = db.prepare(
+            'SELECT id FROM compile_jobs WHERE project_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET 10',
+          ).all(id) as Array<{ id: string }>;
+          const { rm } = await import('fs/promises');
+          for (const s of stale) {
+            await rm(join(DATA_DIR, 'output', s.id), { recursive: true, force: true }).catch(() => {});
+            db.prepare('DELETE FROM compile_jobs WHERE id = ?').run(s.id);
+          }
+        } catch {}
       } catch (err: unknown) {
         db.prepare('UPDATE compile_jobs SET status = ?, finished_at = ? WHERE id = ?').run(
           'error', Date.now(), jobId,

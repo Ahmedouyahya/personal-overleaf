@@ -46,8 +46,9 @@ export async function compile(opts: {
   };
   const cmd = cmds[compiler] ?? cmds.pdflatex;
 
-  const host = process.env.DOCKER_HOST ?? '/var/run/docker.sock';
-  const socketPath = host.startsWith('unix://') ? host.slice(7) : host;
+  const rawHost = process.env.DOCKER_HOST
+    ?? (process.platform === 'win32' ? '//./pipe/docker_engine' : '/var/run/docker.sock');
+  const socketPath = rawHost.startsWith('unix://') ? rawHost.slice(7) : rawHost;
   const docker = new Docker({ socketPath });
 
   const container = await docker.createContainer({
