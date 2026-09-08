@@ -105,7 +105,7 @@ export interface CodeEditorHandle { goToLine: (line: number) => void }
 interface Props {
   content: string;
   onChange: (v: string) => void;
-  imperativeRef?: React.MutableRefObject<CodeEditorHandle | null>;
+  imperativeRef?: React.RefObject<CodeEditorHandle | null>;
 }
 
 export default function CodeEditor({ content, onChange, imperativeRef }: Props) {
@@ -141,7 +141,7 @@ export default function CodeEditor({ content, onChange, imperativeRef }: Props) 
         extensions: [
           lineNumbers(), history(), foldGutter(), indentOnInput(),
           bracketMatching(), highlightActiveLine(), highlightActiveLineGutter(),
-          highlightSelectionMatches(),
+          highlightSelectionMatches(), EditorView.lineWrapping,
           autocompletion({ override: [latexCompletions as any] }),
           latexLanguage,
           syntaxHighlighting(latexHighlight),
@@ -155,6 +155,16 @@ export default function CodeEditor({ content, onChange, imperativeRef }: Props) 
     viewRef.current = view;
     return () => { view.destroy(); viewRef.current = null; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync async/external content (e.g. file loads after mount) into the view.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (current !== content) {
+      view.dispatch({ changes: { from: 0, to: current.length, insert: content } });
+    }
+  }, [content]);
 
   return <div ref={containerRef} className="h-full w-full overflow-hidden" />;
 }

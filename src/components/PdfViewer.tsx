@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download } from 'lucide-react';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
+// NOTE: worker loads from CDN, so first PDF preview needs internet.
+// Fully offline bundling would vendor pdf.worker.min.mjs into /public.
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface Props {
@@ -19,6 +21,9 @@ export default function PdfViewer({ url, pdfJobId, onNavigate }: Props) {
   const [page, setPage]         = useState(1);
   const [scale, setScale]       = useState(1.2);
   const [error, setError]       = useState<string | null>(null);
+
+  // New compile → back to page 1 (old page may not exist in the new PDF).
+  useEffect(() => { setPage(1); setNumPages(0); setError(null); }, [url]);
 
   const handleDblClick = useCallback((e: React.MouseEvent<HTMLDivElement>, pageNum: number) => {
     if (!pdfJobId || !onNavigate) return;
@@ -45,8 +50,8 @@ export default function PdfViewer({ url, pdfJobId, onNavigate }: Props) {
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-1 rounded hover:bg-white/10 disabled:opacity-30">
           <ChevronLeft size={13} />
         </button>
-        <span>{page} / {numPages || '—'}</span>
-        <button onClick={() => setPage(p => Math.min(numPages, p + 1))} disabled={page >= numPages} className="p-1 rounded hover:bg-white/10 disabled:opacity-30">
+        <span>{numPages ? page : '—'} / {numPages || '—'}</span>
+        <button onClick={() => setPage(p => numPages ? Math.min(numPages, p + 1) : p)} disabled={page >= numPages} className="p-1 rounded hover:bg-white/10 disabled:opacity-30">
           <ChevronRight size={13} />
         </button>
         <div className="flex-1" />
@@ -68,20 +73,18 @@ export default function PdfViewer({ url, pdfJobId, onNavigate }: Props) {
         ) : (
           <Document
             file={url}
-            onLoadSuccess={({ numPages }) => { setNumPages(numPages); setError(null); }}
+            onLoadSuccess={({ numPages }) => { setNumPages(numPages); setPage(1); setError(null); }}
             onLoadError={e => setError('Failed to load PDF: ' + e.message)}
             loading={<div className="text-white/40 text-sm mt-8">Loading PDF…</div>}
           >
-            {Array.from({ length: numPages }, (_, i) => i + 1).map(n => (
-              <div
-                key={n}
-                className="shadow-2xl mb-4"
-                onDoubleClick={e => handleDblClick(e, n)}
-                style={{ cursor: onNavigate ? 'crosshair' : 'default' }}
-              >
-                <Page pageNumber={n} scale={scale} renderTextLayer renderAnnotationLayer />
-              </div>
-            ))}
+            {/* Render current page only — rendering all pages at once stalls large docs. */}
+            <div
+              className="shadow-2xl mb-4"
+              onDoubleClick={e => handleDblClick(e, page)}
+              style={{ cursor: onNavigate ? 'crosshair' : 'default' }}
+            >
+              <Page pageNumber={page} scale={scale} renderTextLayer renderAnnotationLayer />
+            </div>
           </Document>
         )}
       </div>
