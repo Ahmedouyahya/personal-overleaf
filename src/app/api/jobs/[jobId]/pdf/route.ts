@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, DATA_DIR } from '@/lib/db';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { createReadStream, existsSync } from 'fs';
 import { stat } from 'fs/promises';
 
@@ -13,7 +13,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ jobId: str
   if (!job) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
   if (job.status !== 'success') return NextResponse.json({ error: 'PDF not ready' }, { status: 404 });
 
-  const pdfName = job.main_file.replace(/\.tex$/i, '') + '.pdf';
+  const rawPdf = job.main_file.replace(/\.tex$/i, '') + '.pdf';
+  const pdfName = basename(rawPdf);
+  if (!pdfName.endsWith('.pdf')) return NextResponse.json({ error: 'PDF not found' }, { status: 404 });
   const pdfPath = join(DATA_DIR, 'output', jobId, pdfName);
 
   if (!existsSync(pdfPath)) return NextResponse.json({ error: 'PDF not found' }, { status: 404 });

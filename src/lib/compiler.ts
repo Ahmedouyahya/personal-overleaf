@@ -4,7 +4,8 @@ import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 
 const IMAGE = process.env.TEXLIVE_IMAGE ?? 'localhost/latexforge/texlive:2024';
-const TIMEOUT_MS = parseInt(process.env.COMPILE_TIMEOUT ?? '120', 10) * 1000;
+const parsedTimeout = parseInt(process.env.COMPILE_TIMEOUT ?? '120', 10);
+const TIMEOUT_MS = (Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? Math.min(parsedTimeout, 600) : 120) * 1000;
 
 export interface CompileResult {
   success: boolean;

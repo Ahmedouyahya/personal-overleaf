@@ -1,5 +1,6 @@
 import { db, DATA_DIR } from '@/lib/db';
 import { compile } from '@/lib/compiler';
+import { isCompiler, isSafePath } from '@/lib/validate';
 import { randomUUID } from 'crypto';
 import { join } from 'path';
 import { writeFile } from 'fs/promises';
@@ -9,8 +10,14 @@ export const maxDuration = 300; // 5 min Vercel timeout hint (ignored locally)
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const mainFile: string = body.mainFile ?? 'main.tex';
-  const compiler: string = body.compiler ?? 'pdflatex';
+  const mainFile: string = typeof body.mainFile === 'string' ? body.mainFile : 'main.tex';
+  const compiler: string = isCompiler(body.compiler) ? body.compiler : 'pdflatex';
+
+  if (!isSafePath(mainFile) || !mainFile.endsWith('.tex')) {
+    return new Response('data: {"type":"error","message":"Invalid mainFile (must be a safe .tex path)"}\n\n', {
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+  }
 
   const files = db
     .prepare('SELECT path, content, storage_path FROM files WHERE project_id = ?')
@@ -18,6 +25,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (!files.length) {
     return new Response('data: {"type":"error","message":"No files in project"}\n\n', {
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+  }
+
+  if (!files.some(f => f.path === mainFile)) {
+    return new Response('data: {"type":"error","message":"mainFile not found in project"}\n\n', {
       headers: { 'Content-Type': 'text/event-stream' },
     });
   }

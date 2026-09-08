@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, DATA_DIR } from '@/lib/db';
+import { isFiniteNumber } from '@/lib/validate';
 import { join, basename } from 'path';
 import { existsSync } from 'fs';
 import { execFile } from 'child_process';
@@ -11,6 +12,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ jobId: 
   const { jobId } = await params;
   const { page, x, y } = await req.json();
 
+  if (!isFiniteNumber(page, 1, 10000) || !isFiniteNumber(x, -100000, 100000) || !isFiniteNumber(y, -100000, 100000))
+    return NextResponse.json({ error: 'Invalid page/coordinates' }, { status: 400 });
+
   const job = db.prepare('SELECT status, main_file FROM compile_jobs WHERE id = ?').get(jobId) as
     | { status: string; main_file: string }
     | undefined;
@@ -18,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ jobId: 
   if (!job || job.status !== 'success')
     return NextResponse.json({ error: 'Job not found or not successful' }, { status: 404 });
 
-  const pdfName = job.main_file.replace(/\.tex$/i, '') + '.pdf';
+  const pdfName = basename(job.main_file.replace(/\.tex$/i, '') + '.pdf');
   const pdfPath = join(DATA_DIR, 'output', jobId, pdfName);
 
   if (!existsSync(pdfPath))
