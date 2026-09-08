@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { isSafePath } from '@/lib/validate';
 
 type Ctx = { params: Promise<{ id: string; fileId: string }> };
 
@@ -17,9 +18,22 @@ export async function PUT(req: Request, { params }: Ctx) {
   const cols: string[] = [];
   const vals: unknown[] = [];
 
-  if (body.content !== undefined) { cols.push('content = ?'); vals.push(body.content); }
-  if (body.name !== undefined)    { cols.push('name = ?');    vals.push(body.name); }
-  if (body.path !== undefined)    { cols.push('path = ?');    vals.push(body.path); }
+  if (body.content !== undefined) {
+    if (typeof body.content !== 'string') return NextResponse.json({ error: 'Invalid content' }, { status: 400 });
+    cols.push('content = ?'); vals.push(body.content.slice(0, 1_000_000));
+  }
+  if (body.name !== undefined) {
+    const clean = typeof body.name === 'string' ? body.name.trim().slice(0, 100) : '';
+    if (!clean) return NextResponse.json({ error: 'Invalid name' }, { status: 400 });
+    cols.push('name = ?'); vals.push(clean);
+  }
+  if (body.path !== undefined) {
+    const clean = typeof body.path === 'string' ? body.path.trim() : '';
+    if (!isSafePath(clean)) return NextResponse.json({ error: 'Unsafe path (no absolute paths or ..)' }, { status: 400 });
+    const dup = db.prepare('SELECT id FROM files WHERE project_id = ? AND path = ? AND id != ?').get(id, clean, fileId);
+    if (dup) return NextResponse.json({ error: 'A file with this path already exists' }, { status: 409 });
+    cols.push('path = ?'); vals.push(clean);
+  }
   if (!cols.length) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
 
   cols.push('updated_at = ?');

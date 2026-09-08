@@ -40,6 +40,9 @@ db.exec(`
     duration_ms INTEGER,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
   );
+
+  CREATE INDEX IF NOT EXISTS idx_files_project ON files(project_id);
+  CREATE INDEX IF NOT EXISTS idx_jobs_project ON compile_jobs(project_id);
 `);
 
 // Migrate existing DBs: add storage_path if absent
