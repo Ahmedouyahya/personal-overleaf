@@ -6,3 +6,4 @@ data/
 .env.*.local
 tsconfig.tsbuildinfo
 coverage/
+public/pdf.worker.min.mjs

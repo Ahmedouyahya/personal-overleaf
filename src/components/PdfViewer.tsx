@@ -6,9 +6,9 @@ import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download } from 'lucide-rea
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// NOTE: worker loads from CDN, so first PDF preview needs internet.
-// Fully offline bundling would vendor pdf.worker.min.mjs into /public.
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Vendored locally (scripts/copy-pdf-worker.mjs → public/) so preview works
+// offline and loads same-origin instead of a CDN round-trip.
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
 interface Props {
   url: string;

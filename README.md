@@ -4,28 +4,33 @@ Minimal offline single-user LaTeX editor — Next.js + SQLite + Docker.
 
 Create projects, edit `.tex` files with LaTeX highlighting + autocomplete, upload figures, compile with `pdflatex` / `xelatex` / `lualatex` / `latexmk` in an isolated container, preview the PDF, and double-click the PDF to jump back to source (SyncTeX).
 
-## Quickstart
+## Quickstart (easiest first)
 
-Prerequisites: Node 22+, Docker running.
-
-```bash
-cp .env.example .env.local   # optional, defaults work
-npm install
-npm run dev                  # http://localhost:3000
-```
-
-Compile needs a TeX Live Docker image (default `localhost/latexforge/texlive:2024`, override via `TEXLIVE_IMAGE`):
+**Option A — one command (recommended):**
 
 ```bash
-docker pull texlive/texlive:latest
-TEXLIVE_IMAGE=texlive/texlive:latest npm run dev
+npm run setup   # checks Node + Docker, creates .env.local, installs, pulls TeX Live
+npm run dev     # http://localhost:3000
 ```
 
-Or with Compose:
+**Option B — Docker only (no Node needed):**
 
 ```bash
 docker compose up --build    # http://localhost:3000
 ```
+
+**Option C — manual:**
+
+```bash
+cp .env.example .env.local   # optional, defaults work
+npm install                  # also vendors the PDF worker for offline preview
+docker pull texlive/texlive:latest
+TEXLIVE_IMAGE=texlive/texlive:latest npm run dev
+```
+
+Windows: use WSL2 + Docker Desktop. The app talks to `//./pipe/docker_engine` by default on win32, or set `DOCKER_HOST`.
+
+Verify setup anytime: `curl http://localhost:3000/api/health` → `{ ok: true, checks: … }`.
 
 ## Usage
 
@@ -41,15 +46,23 @@ docker compose up --build    # http://localhost:3000
 | --- | ------- | ------- |
 | `TEXLIVE_IMAGE` | `localhost/latexforge/texlive:2024` | TeX Live image spawned per compile |
 | `COMPILE_TIMEOUT` | `120` | Seconds before a compile is killed |
-| `DOCKER_HOST` | `/var/run/docker.sock` | Docker socket for `dockerode` |
+| `DOCKER_HOST` | `/var/run/docker.sock` (`//./pipe/docker_engine` on Windows) | Docker socket for `dockerode` |
 
 ## Scripts
 
 ```bash
+npm run setup  # one-time: checks, .env.local, install, TeX image
 npm run dev    # dev server
-npm run build  # production build
+npm run build  # production build (standalone, see Dockerfile)
 npm start      # serve production build
 ```
+
+## Performance notes
+
+- PDF preview renders the current page only and caches immutable job PDFs (`private, max-age=3600`); the PDF worker is vendored into `public/` so preview works offline with no CDN round-trip.
+- Compile runs in a locked-down container (no network, 512 MB, 1 CPU, capped timeout) and streams logs via SSE.
+- Only the 10 newest compile jobs per project are kept — older PDFs + DB rows are pruned automatically, so disk use stays flat.
+- Production Docker image uses Next.js `standalone` output (no dev deps, smaller/faster start).
 
 ## Project structure
 
