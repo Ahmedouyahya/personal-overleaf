@@ -4,6 +4,16 @@ Minimal offline single-user LaTeX editor — Next.js + SQLite + Docker.
 
 Create projects, edit `.tex` files with LaTeX highlighting + autocomplete, upload figures, compile with `pdflatex` / `xelatex` / `lualatex` / `latexmk` in an isolated container, preview the PDF, and double-click the PDF to jump back to source (SyncTeX).
 
+## Screenshots
+
+**Editor** — LaTeX source with highlighting and autocomplete on the left, PDF preview on the right, compile output parsed into issues below:
+
+![Editor showing LaTeX source beside the PDF preview](docs/screenshots/editor.png)
+
+**Dashboard** — projects are rows in a SQLite file on your own disk:
+
+![Dashboard listing projects](docs/screenshots/dashboard.png)
+
 ## Why this exists
 
 Overleaf is excellent. If you're happy sending your drafts to someone else's servers, use it — it's better at collaboration than this will ever be.
