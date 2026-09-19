@@ -9,6 +9,7 @@ import {
   CheckCircle2, TriangleAlert, Eye, Terminal, ChevronRight, Upload,
 } from 'lucide-react';
 import { loadPrefs } from '@/lib/settings';
+import ErrorPanel from '@/components/ErrorPanel';
 
 const CodeEditor = dynamic(() => import('@/components/CodeEditor'), { ssr: false });
 const PdfViewer  = dynamic(() => import('@/components/PdfViewer'),  { ssr: false });
@@ -487,27 +488,12 @@ export default function EditorPage({ params }: { params: Promise<{ id: string }>
                 </div>
               )
             ) : (
-              <div className="h-full overflow-y-auto font-mono text-[11px] leading-relaxed p-3 text-[#9ca3af] whitespace-pre-wrap break-all">
-                {logs.length === 0 ? (
-                  <span className="text-[#3b4261]">No output yet — press Compile.</span>
-                ) : logs.map((line, i) => {
-                  const m = line.match(/(?:^|\s)l\.(\d+)\b/);
-                  if (!m) return <div key={i}>{line}</div>;
-                  const n = parseInt(m[1], 10);
-                  return (
-                    <div key={i}>
-                      {line}{' '}
-                      <button
-                        onClick={() => { setRightTab('pdf'); editorRef.current?.goToLine(n); }}
-                        className="text-[#7aa2f7] hover:underline"
-                        title={`Jump to line ${n}`}
-                      >
-                        → line {n}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+              <ErrorPanel
+                logs={logs}
+                compiling={compiling}
+                source={content}
+                onJump={(line) => editorRef.current?.goToLine(line)}
+              />
             )}
           </div>
         </div>
