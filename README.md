@@ -4,6 +4,33 @@ Minimal offline single-user LaTeX editor — Next.js + SQLite + Docker.
 
 Create projects, edit `.tex` files with LaTeX highlighting + autocomplete, upload figures, compile with `pdflatex` / `xelatex` / `lualatex` / `latexmk` in an isolated container, preview the PDF, and double-click the PDF to jump back to source (SyncTeX).
 
+## Screenshots
+
+**Editor** — LaTeX source with highlighting and autocomplete on the left, PDF preview on the right, compile output parsed into issues below:
+
+![Editor showing LaTeX source beside the PDF preview](docs/screenshots/editor.png)
+
+**Dashboard** — projects are rows in a SQLite file on your own disk:
+
+![Dashboard listing projects](docs/screenshots/dashboard.png)
+
+## Why this exists
+
+Overleaf is excellent. If you're happy sending your drafts to someone else's servers, use it — it's better at collaboration than this will ever be.
+
+This is for the case where the document cannot leave the machine: a paper under embargo, a thesis with unpublished results, client work under NDA, or simply a laptop that's offline. You keep the editing experience — live preview, click-to-source, real LaTeX — without a copy of your source living on a third party's disk.
+
+There is no account, no telemetry, and no network dependency after the initial Docker pull. Compilation happens in a container with networking disabled.
+
+| | Personal Overleaf | Overleaf.com | Local `latexmk` + editor |
+| --- | --- | --- | --- |
+| Document leaves your machine | **No** | Yes | No |
+| Live preview + click-to-source | Yes | Yes | Manual |
+| Setup effort | `npm run setup` | None | You assemble it |
+| Works fully offline | Yes (after image pull) | No | Yes |
+| Collaboration | No — single user by design | Yes | No |
+| Cost | Free (MIT) | Free tier / paid | Free |
+
 ## Quickstart (easiest first)
 
 **Option A — one command (recommended):**
@@ -39,6 +66,13 @@ Verify setup anytime: `curl http://localhost:3000/api/health` → `{ ok: true, c
 3. Pick compiler + main file in the header, press Compile (or `Ctrl/Cmd+Enter`).
 4. Double-click PDF to jump to the `.tex` line (needs `synctex` binary on host for reverse lookup).
 5. Upload `.png` / `.pdf` figures via the upload button; reference with `\includegraphics{filename}`.
+6. The Log tab parses the compiler output into issues — errors, warnings, over/underfull boxes — each with its line number. Click a line number to jump to it, or press **raw** to see the console output verbatim. An overfull box reports the whole line range it spans.
+
+## Optional: explain errors with an AI endpoint
+
+Any issue in the Log tab has an **explain** button. It sends that one error — plus a small window of the surrounding source — to an OpenAI-compatible endpoint you configure yourself, and prints the reply inline.
+
+This is bring-your-own-key and entirely optional; with nothing configured the button just tells you to go and set one up. The key is stored in your browser's `localStorage` and is forwarded only to the endpoint you entered — it never touches this app's server, database, or logs. Presets exist for OpenAI and for a local Ollama, which keeps the whole thing offline.
 
 ## Settings
 
@@ -49,6 +83,9 @@ Gear icon (dashboard) → stored in this browser only:
 | Default compiler | pdflatex / xelatex / lualatex / latexmk | Pre-selected for new editor sessions |
 | Autosave delay | 0.5s / 1s / 2s | Debounce for editor PUTs (2s = fewer writes) |
 | Default PDF zoom | 100 / 120 / 150% | Initial preview scale per compile |
+| AI endpoint | OpenAI-compatible base URL, or a preset | Where **explain** sends the error; empty disables it |
+| AI model | any model id the endpoint accepts | Sent with each request |
+| AI key | your key | Kept in this browser only, sent only to the endpoint above |
 
 Server knobs (image, timeout, socket) stay in env — see below. They apply to everyone using this install.
 
@@ -102,4 +139,16 @@ npm start      # serve production build
 
 ## Contributing
 
-Small focused PRs welcome: one fix per PR, run `npx tsc --noEmit` before pushing.
+Small focused PRs welcome — one change per PR. Before pushing:
+
+```bash
+npx tsc --noEmit   # types
+npm test           # unit tests (vitest)
+npm run build      # production build
+```
+
+Tests live next to what they test (`src/lib/latex-errors.test.ts` is the pattern to follow): one `describe` per function, `it` names that state the behaviour rather than the implementation.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
